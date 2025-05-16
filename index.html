@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D電卓アプリ</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Three.js CDN -->
+    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.157.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.157.0/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="loading-info">読み込み中...<br>ドラッグで3Dモデルを回転、クリックで操作します。</div>
+    <div id="canvas-container"></div>
+    <script type="module" src="script.js"></script>
+</body>
+</html>
