@@ -87,15 +87,16 @@ function initThreeJS() {
 }
 
 // --- 3D電卓モデル作成 ---
+// --- 3D電卓モデル作成 ---
 function createCalculatorModel() {
     calculatorModel = new THREE.Group();
 
     const bodyWidth = 2.0;
-    const bodyHeight = 3.6; // 縦サイズ微調整
+    const bodyHeight = 3.6;
     const bodyDepth = 0.3;
 
     const bodyMaterial = new THREE.MeshStandardMaterial({
-        color: 0x383838, // 本体色微調整
+        color: 0x383838,
         metalness: 0.35,
         roughness: 0.55,
     });
@@ -107,26 +108,23 @@ function createCalculatorModel() {
 
     // ディスプレイ関連
     const screenWidth = 1.6;
-    const screenHeight = 0.65; // ディスプレイ縦微調整
-    const screenPanelDepth = 0.03; // ディスプレイ表示面の厚み
-    const screenFrameThickness = 0.05; // 枠の太さ
-    // ディスプレイ全体のY位置 (本体上端から少し下)
+    const screenHeight = 0.65;
+    const screenPanelDepth = 0.03;
+    const screenFrameThickness = 0.05;
     const displayCenterY = bodyHeight * 0.5 - screenHeight * 0.5 - 0.35;
 
     // ディスプレイの枠
     const screenFrameMaterial = new THREE.MeshStandardMaterial({
-        color: 0x252525, // 枠の色微調整
+        color: 0x252525,
         metalness: 0.3,
         roughness: 0.45
     });
-    // 枠のジオメトリは表示面より少しだけ大きい
     const screenFrameGeometry = new THREE.BoxGeometry(
         screenWidth + screenFrameThickness,
         screenHeight + screenFrameThickness,
-        screenPanelDepth + 0.005 // 枠は表示面よりわずかに厚い
+        screenPanelDepth + 0.005
     );
     const screenFrameMesh = new THREE.Mesh(screenFrameGeometry, screenFrameMaterial);
-    // 枠の位置: Zは本体前面 (bodyDepth/2) + 枠の厚みの半分
     screenFrameMesh.position.set(0, displayCenterY, bodyDepth / 2 + (screenPanelDepth + 0.005) / 2 - screenPanelDepth / 2 );
     screenFrameMesh.castShadow = true;
     calculatorModel.add(screenFrameMesh);
@@ -134,110 +132,148 @@ function createCalculatorModel() {
     // ディスプレイ表示面 (CanvasTexture用)
     const canvas = document.createElement('canvas');
     const textureSize = 512;
-    canvas.width = textureSize * (screenWidth / screenHeight); // アスペクト比維持
+    canvas.width = textureSize * (screenWidth / screenHeight);
     canvas.height = textureSize;
     textureContext = canvas.getContext('2d');
     canvasTexture = new THREE.CanvasTexture(canvas);
 
     const screenDisplayMaterial = new THREE.MeshStandardMaterial({
         map: canvasTexture,
-        emissive: 0x607D8B, // エミッシブ色変更 (青みがかったグレー)
+        emissive: 0x607D8B,
         emissiveIntensity: 0.9,
-        roughness: 0.95, // 反射を抑える
-        // polygonOffset: true, // Z-fighting対策, 必要なら有効化
-        // polygonOffsetFactor: 1,
-        // polygonOffsetUnits: 1,
+        roughness: 0.95,
     });
     update3DDisplay("0"); // 初期表示
 
     const screenPanelGeometry = new THREE.BoxGeometry(screenWidth, screenHeight, screenPanelDepth);
     displayMesh = new THREE.Mesh(screenPanelGeometry, screenDisplayMaterial);
-    // 表示面の位置: Zは本体前面 (bodyDepth/2) + 表示面自身の厚みの半分 + わずかなオフセット
-    displayMesh.position.set(0, displayCenterY, bodyDepth / 2 + screenPanelDepth / 2 + 0.001); // 枠より手前になるように
+    displayMesh.position.set(0, displayCenterY, bodyDepth / 2 + screenPanelDepth / 2 + 0.001);
     calculatorModel.add(displayMesh);
 
 
     // ボタン群
-    const buttonSize = 0.36; // ボタンサイズ微調整
+    const buttonSize = 0.36;
     const buttonDepth = 0.1;
-    const buttonSpacing = 0.07; // ボタン間隔微調整
-    const buttonRows = 5;
-    const buttonCols = 4;
+    const buttonSpacing = 0.07;
+    const buttonRows = 5; // 物理的な行数
+    const buttonCols = 4; // 物理的な列数
     const startX = - (buttonCols / 2 - 0.5) * (buttonSize + buttonSpacing);
-    // ボタン群の開始Y位置 (ディスプレイの下端からマージンを空けて)
-    const buttonsTopY = displayCenterY - screenHeight / 2 - 0.25; // マージン調整
+    const buttonsTopY = displayCenterY - screenHeight / 2 - 0.25;
 
-    const buttonLayout = [
-        ['7', '8', '9', '/'], ['4', '5', '6', '*'], ['1', '2', '3', '-'],
-        ['0', '.', '=', '+'], ['C', 'C', 'C', 'C']
+    // [表示文字, 内部値] のペアで定義
+    // 最後の行はCボタンなので、それを考慮した配列構造
+    const buttonDefinitions = [
+        // Row 0
+        ['7', '7'], ['8', '8'], ['9', '9'], ['÷', '/'],
+        // Row 1
+        ['4', '4'], ['5', '5'], ['6', '6'], ['×', '*'],
+        // Row 2
+        ['1', '1'], ['2', '2'], ['3', '3'], ['-', '-'],
+        // Row 3
+        ['0', '0'], ['.', '.'], ['=', '='], ['+', '+'],
+        // Row 4 (C button - special handling)
+        // Cボタンは1つの要素として扱い、ループ内で特別に処理する
     ];
+    const cButtonDefinition = ['C', 'C'];
 
-    const buttonFont = "bold 46px Arial"; // フォントサイズ微調整
+
+    const buttonFont = "bold 46px Arial";
     const buttonTextColor = "white";
     clickableObjects = [];
 
     const numButtonMaterial = new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.2, roughness: 0.7 });
-    const opButtonMaterial = new THREE.MeshStandardMaterial({ color: 0xFF9800, metalness: 0.2, roughness: 0.7 }); // オレンジ
-    const clearButtonMaterial = new THREE.MeshStandardMaterial({ color: 0xF44336, metalness: 0.2, roughness: 0.7 }); // 赤
-    const equalsButtonMaterial = new THREE.MeshStandardMaterial({ color: 0x4CAF50, metalness: 0.2, roughness: 0.7 }); // 緑
+    const opButtonMaterial = new THREE.MeshStandardMaterial({ color: 0xFF9800, metalness: 0.2, roughness: 0.7 });
+    const clearButtonMaterial = new THREE.MeshStandardMaterial({ color: 0xF44336, metalness: 0.2, roughness: 0.7 });
+    const equalsButtonMaterial = new THREE.MeshStandardMaterial({ color: 0x4CAF50, metalness: 0.2, roughness: 0.7 });
+
+    let definitionIndex = 0; // buttonDefinitions 配列のインデックス
 
     for (let r = 0; r < buttonRows; r++) {
         for (let c = 0; c < buttonCols; c++) {
-            const buttonValue = buttonLayout[r][c];
-            if (buttonValue === 'C' && c > 0) continue; // Cボタンは最初の1つだけ
-
+            let buttonDisplayValue;
+            let buttonInternalValue;
             let currentButtonSizeX = buttonSize;
             let currentMaterial;
-            let buttonType = 'number';
+            let buttonType;
 
-            if (['/', '*', '-', '+'].includes(buttonValue)) { currentMaterial = opButtonMaterial; buttonType = 'operator'; }
-            else if (buttonValue === '=') { currentMaterial = equalsButtonMaterial; buttonType = 'equals'; }
-            else if (buttonValue === 'C') {
-                currentMaterial = clearButtonMaterial; buttonType = 'clear';
-                currentButtonSizeX = buttonSize * buttonCols + buttonSpacing * (buttonCols - 1);
+            if (r === 4) { // 最後の行はCボタン
+                if (c === 0) { // Cボタンは最初の列のみで描画
+                    buttonDisplayValue = cButtonDefinition[0];
+                    buttonInternalValue = cButtonDefinition[1];
+                    currentButtonSizeX = buttonSize * buttonCols + buttonSpacing * (buttonCols - 1); // 横長
+                    currentMaterial = clearButtonMaterial;
+                    buttonType = 'clear';
+                } else {
+                    continue; // Cボタン行の2列目以降はスキップ
+                }
+            } else { // 通常のボタン (Cボタン以外の行)
+                if (definitionIndex < buttonDefinitions.length) {
+                    buttonDisplayValue = buttonDefinitions[definitionIndex][0];
+                    buttonInternalValue = buttonDefinitions[definitionIndex][1];
+                    definitionIndex++;
+                } else {
+                    console.error("Button definition out of bounds!");
+                    continue;
+                }
+
+                // buttonInternalValue を使って判定
+                if (['/', '*', '-', '+'].includes(buttonInternalValue)) {
+                    currentMaterial = opButtonMaterial; buttonType = 'operator';
+                } else if (buttonInternalValue === '=') {
+                    currentMaterial = equalsButtonMaterial; buttonType = 'equals';
+                } else if (buttonInternalValue === '.') {
+                    currentMaterial = numButtonMaterial; buttonType = 'decimal';
+                } else { // 数字ボタン
+                    currentMaterial = numButtonMaterial; buttonType = 'number';
+                }
             }
-            else if (buttonValue === '.') { currentMaterial = numButtonMaterial; buttonType = 'decimal';} // . も数字ボタンと同じマテリアル
-            else { currentMaterial = numButtonMaterial; } // 数字ボタン
 
             const buttonGeometry = new THREE.BoxGeometry(currentButtonSizeX, buttonSize, buttonDepth);
-            const buttonMesh = new THREE.Mesh(buttonGeometry, currentMaterial.clone()); // マテリアル複製
+            const buttonMesh = new THREE.Mesh(buttonGeometry, currentMaterial.clone());
 
             let posX = startX + c * (buttonSize + buttonSpacing);
-            if (buttonValue === 'C') posX = 0; // Cボタンは中央揃え
+            // Cボタンまたは横幅が異なるボタンの場合の位置調整
+            if (buttonInternalValue === 'C') {
+                posX = 0; // Cボタンは中央揃え
+            } else if (currentButtonSizeX !== buttonSize) {
+                // もしC以外で横幅が異なるボタンがあれば、ここでposXを調整
+                // 今回はCボタンのみが横幅可変なので、この分岐は実質Cボタン用
+                posX = startX + ( (currentButtonSizeX - buttonSize) / 2 ) + c * (buttonSize + buttonSpacing) ;
+            }
+
 
             const currentButtonY = buttonsTopY - buttonSize / 2 - r * (buttonSize + buttonSpacing);
             buttonMesh.position.set(posX, currentButtonY, bodyDepth / 2 + buttonDepth / 2);
             buttonMesh.castShadow = true;
             buttonMesh.receiveShadow = true;
-            buttonMesh.userData = { value: buttonValue, type: buttonType, originalColor: currentMaterial.color.clone() };
+            buttonMesh.userData = { value: buttonInternalValue, type: buttonType, originalColor: currentMaterial.color.clone() };
             calculatorModel.add(buttonMesh);
             clickableObjects.push(buttonMesh);
 
             // ボタンラベル
             const labelCanvas = document.createElement('canvas');
             const labelResBase = 128;
-            labelCanvas.width = buttonValue === 'C' ? labelResBase * (currentButtonSizeX / buttonSize) : labelResBase;
+            labelCanvas.width = (buttonInternalValue === 'C') ? labelResBase * (currentButtonSizeX / buttonSize) : labelResBase;
             labelCanvas.height = labelResBase;
             const labelCtx = labelCanvas.getContext('2d');
-            const scaledFontSize = 46 * (labelResBase / 128); // buttonFontのサイズに合わせる
+            const scaledFontSize = 46 * (labelResBase / 128);
             labelCtx.font = `bold ${scaledFontSize}px Arial`;
             labelCtx.fillStyle = buttonTextColor;
             labelCtx.textAlign = "center";
             labelCtx.textBaseline = "middle";
-            labelCtx.fillText(buttonValue, labelCanvas.width / 2, labelCanvas.height / 2 + scaledFontSize * 0.08); // Yオフセット微調整
+            labelCtx.fillText(buttonDisplayValue, labelCanvas.width / 2, labelCanvas.height / 2 + scaledFontSize * 0.08);
 
             const labelTexture = new THREE.CanvasTexture(labelCanvas);
             const labelMaterial = new THREE.MeshBasicMaterial({ map: labelTexture, transparent: true, depthWrite: false, side: THREE.DoubleSide });
-            const labelPlane = new THREE.PlaneGeometry(currentButtonSizeX * 0.8, buttonSize * 0.8); // ラベルサイズ調整
+            const labelPlane = new THREE.PlaneGeometry(currentButtonSizeX * 0.8, buttonSize * 0.8);
             const labelMesh = new THREE.Mesh(labelPlane, labelMaterial);
-            labelMesh.position.set(posX, currentButtonY, bodyDepth / 2 + buttonDepth + 0.015); // Zオフセット調整
+            labelMesh.position.set(posX, currentButtonY, bodyDepth / 2 + buttonDepth + 0.015);
             calculatorModel.add(labelMesh);
         }
     }
     scene.add(calculatorModel);
-    console.log("Calculator model created.");
+    console.log("Calculator model created with updated button labels.");
 }
-
 // --- 3Dモデルのディスプレイ表示更新 ---
 function update3DDisplay(text) {
     if (!textureContext || !canvasTexture) {
